@@ -2,29 +2,27 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import fetch from "node-fetch";
 
 dotenv.config();
 
 const app = express();
 
-/* -------------------- BASIC MIDDLEWARE -------------------- */
-app.use(cors({ origin: "*" }));
+// ⚡ middleware
+app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
-/* -------------------- MONGODB CONNECT -------------------- */
+// ⚡ Mongo connect (1 marta)
 mongoose
   .connect(process.env.MONGO_URL, {
     serverSelectionTimeoutMS: 5000,
   })
   .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB error:", err.message));
+  .catch((err) => {
+    console.error("❌ MongoDB error", err);
+    process.exit(1);
+  });
 
-mongoose.connection.on("error", (err) => {
-  console.error("❌ Mongo runtime error:", err.message);
-});
-
-/* -------------------- SCHEMA -------------------- */
+// ⚡ Schema
 const OrderSchema = new mongoose.Schema(
   {
     name: String,
@@ -39,74 +37,53 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔥 indeks – tez o‘qish uchun
-OrderSchema.index({ createdAt: -1 });
-
 const Order = mongoose.model("Order", OrderSchema);
 
-/* -------------------- ROUTES -------------------- */
-
-// HEALTH CHECK (Render uyg‘onishi uchun)
-app.get("/", (req, res) => {
-  res.status(200).send("🚀 Gilam backend ishlayapti");
+// 🔹 TEST
+app.get("/", (_, res) => {
+  res.send("🚀 Gilam backend ishlayapti");
 });
 
-// ORDERS LIST
-app.get("/orders", async (req, res) => {
+// 🔹 GET orders
+app.get("/orders", async (_, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 }).limit(200);
+    const orders = await Order.find().sort({ createdAt: -1 }).limit(100);
 
     res.json(orders);
   } catch (e) {
-    res.status(500).json({ error: "Orders olishda xato" });
+    res.status(500).json({ error: "DB error" });
   }
 });
 
-// CREATE ORDER (tez javob)
+// 🔹 POST order (ENG MUHIM JOY)
 app.post("/orders", async (req, res) => {
   try {
-    const order = new Order(req.body);
+    const order = await Order.create(req.body);
 
-    // 🔥 MUHIM: oldin response, keyin save
-    res.status(201).json({ ok: true });
-
-    await order.save();
+    // ⚡ DARHOL javob
+    res.status(201).json({
+      ok: true,
+      order,
+    });
   } catch (e) {
-    console.error("❌ Save error:", e.message);
+    res.status(400).json({ error: "Create error" });
   }
 });
 
-// DELETE
+// 🔹 DELETE
 app.delete("/orders/:id", async (req, res) => {
-  try {
-    const deleted = await Order.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ ok: false });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ ok: false });
-  }
+  const deleted = await Order.findByIdAndDelete(req.params.id);
+  if (!deleted) return res.status(404).json({ ok: false });
+  res.json({ ok: true });
 });
 
-// DELIVERED
+// 🔹 DELIVER
 app.put("/orders/:id/deliver", async (req, res) => {
-  try {
-    await Order.findByIdAndUpdate(req.params.id, { delivered: true });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ ok: false });
-  }
+  await Order.findByIdAndUpdate(req.params.id, { delivered: true });
+  res.json({ ok: true });
 });
 
-/* --- KEEP ALIVE (ENG MUHIM QISM) -------------------- */
-// Render uxlab qolmasligi uchun
-setInterval(() => {
-  fetch("https://gilam-yuvish-backend.onrender.com")
-    .then(() => console.log("🔄 keep-alive ping"))
-    .catch(() => {});
-}, 5 * 60 * 1000); // har 5 daqiqa
-
-/* -------------------- START -------------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("🚀 Backend port:", PORT);
+  console.log("🚀 Server port:", PORT);
 });
