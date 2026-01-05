@@ -2,88 +2,134 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import fetch from "node-fetch";
 
 dotenv.config();
 
 const app = express();
 
-// ⚡ middleware
-app.use(cors());
+/* ================== MIDDLEWARE ================== */
+app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "1mb" }));
 
-// ⚡ Mongo connect (1 marta)
+/* ================== MONGODB ================== */
 mongoose
   .connect(process.env.MONGO_URL, {
     serverSelectionTimeoutMS: 5000,
   })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => {
-    console.error("❌ MongoDB error", err);
+    console.error("❌ MongoDB connect error:", err.message);
     process.exit(1);
   });
 
-// ⚡ Schema
+mongoose.connection.on("error", (err) => {
+  console.error("❌ Mongo runtime error:", err.message);
+});
+
+/* ================== SCHEMA ================== */
 const OrderSchema = new mongoose.Schema(
   {
-    name: String,
-    phone: String,
-    address: String,
-    items: Array,
-    total: Number,
-    paid: Number,
-    paymentType: String,
+    name: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    address: { type: String, default: "" },
+
+    items: { type: Array, default: [] },
+
+    total: { type: Number, default: 0 },
+    paid: { type: Number, default: 0 },
+
+    paymentType: { type: String, default: "cash" },
+
     delivered: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
+OrderSchema.index({ createdAt: -1 });
+
 const Order = mongoose.model("Order", OrderSchema);
 
-// 🔹 TEST
-app.get("/", (_, res) => {
-  res.send("🚀 Gilam backend ishlayapti");
+/* ================== ROUTES ================== */
+
+// Health check
+app.get("/", (req, res) => {
+  res.status(200).send("🚀 Gilam backend ishlayapti");
 });
 
-// 🔹 GET orders
-app.get("/orders", async (_, res) => {
+/* -------- GET ALL ORDERS -------- */
+app.get("/orders", async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 }).limit(100);
+    const orders = await Order.find().sort({ createdAt: -1 }).limit(300);
 
     res.json(orders);
   } catch (e) {
-    res.status(500).json({ error: "DB error" });
+    console.error("❌ Orders olishda xato:", e.message);
+    res.status(500).json({ ok: false });
   }
 });
 
-// 🔹 POST order (ENG MUHIM JOY)
+/* -------- CREATE ORDER (MUHIM) -------- */
 app.post("/orders", async (req, res) => {
   try {
-    const order = await Order.create(req.body);
+    const order = new Order(req.body);
 
-    // ⚡ DARHOL javob
+    // ❗ AVVAL SAQLAYMIZ
+    await order.save();
+
+    // ❗ KEYIN JAVOB
     res.status(201).json({
       ok: true,
-      order,
+      order, // 👈 FRONTEND SHU BILAN CHEK CHIQARADI
     });
   } catch (e) {
-    res.status(400).json({ error: "Create error" });
+    console.error("❌ Order save error:", e.message);
+    res.status(500).json({ ok: false });
   }
 });
 
-// 🔹 DELETE
+/* -------- DELETE ORDER -------- */
 app.delete("/orders/:id", async (req, res) => {
-  const deleted = await Order.findByIdAndDelete(req.params.id);
-  if (!deleted) return res.status(404).json({ ok: false });
-  res.json({ ok: true });
+  try {
+    const deleted = await Order.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({ ok: false });
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ Delete error:", e.message);
+    res.status(500).json({ ok: false });
+  }
 });
 
-// 🔹 DELIVER
+/* -------- MARK AS DELIVERED -------- */
 app.put("/orders/:id/deliver", async (req, res) => {
-  await Order.findByIdAndUpdate(req.params.id, { delivered: true });
-  res.json({ ok: true });
+  try {
+    await Order.findByIdAndUpdate(req.params.id, {
+      delivered: true,
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ Deliver error:", e.message);
+    res.status(500).json({ ok: false });
+  }
 });
 
+/* ================== KEEP ALIVE (RENDER FREE) ================== */
+const SELF_URL = "https://gilam-yuvish-backend.onrender.com";
+
+setInterval(() => {
+  fetch(SELF_URL)
+    .then(() => console.log("🔄 keep-alive ping"))
+    .catch(() => {});
+}, 4 * 60 * 1000); // 4 daqiqa (eng optimal)
+
+/* ================== START ================== */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log("🚀 Server port:", PORT);
+  console.log("🚀 Backend port:", PORT);
 });
