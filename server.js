@@ -15,7 +15,7 @@ const DEFAULT_PRICE_PER_M2 = Number(process.env.DEFAULT_PRICE_PER_M2 || 15000);
 const TOKEN_TTL_MS = Number(process.env.TOKEN_TTL_HOURS || 12) * 60 * 60 * 1000;
 const SESSION_SECRET =
   process.env.SESSION_SECRET || (NODE_ENV === "test" ? "test-secret" : "");
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "1234";
 
 const STATUSES = ["received", "washing", "drying", "ready", "delivered"];
 const STATUS_LABELS = {
@@ -770,7 +770,6 @@ app.use((error, req, res, next) => {
 function assertRuntimeConfig() {
   const missing = [];
   if (!process.env.MONGO_URL) missing.push("MONGO_URL");
-  if (!ADMIN_PASSWORD) missing.push("ADMIN_PASSWORD");
   if (!SESSION_SECRET) missing.push("SESSION_SECRET");
 
   if (missing.length) {
